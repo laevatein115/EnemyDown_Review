@@ -2,6 +2,8 @@ package plugin.enemydown.command;
 
 import java.util.ArrayList;
 import java.util.Objects;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import java.util.List;
@@ -18,57 +20,99 @@ import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.jetbrains.annotations.NotNull;
+import plugin.enemydown.Main;
 import plugin.enemydown.data.PlayerScore;
 
 public class EnemyDownCommand implements CommandExecutor, Listener {
 
+  private Main main;
   private List<PlayerScore> playerScoreList = new ArrayList<>();
+
+  public EnemyDownCommand(Main main) {
+    this.main = main;
+  }
 
   @Override
   public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
     if (sender instanceof Player player) {
-      if (playerScoreList.isEmpty()) {
-        addNewPlayer(player);
-      } else {
-        for (PlayerScore playerScore : playerScoreList) {
-          if (!playerScore.getPlayerName().equals(player.getName())) {
-            addNewPlayer(player);
-          }
-        }
-      }
+      PlayerScore nowPlayer = getPlayerScore(player);
+      nowPlayer.setGameTime(20);
 
       World world = player.getWorld();
 
       initPlayerStatus(player);
 
-      world.spawnEntity(getEnemySpawnLocation(player, world), getEnemy());
+      Bukkit.getScheduler().runTaskTimer(main, Runnable -> {
+        if (nowPlayer.getGameTime() <= 0) {
+          Runnable.cancel();
+          player.sendTitle("ゲームが終了しました。",
+              nowPlayer.getPlayerName() + " 合計 " + nowPlayer.getScore() + "点！",
+              0, 30, 0);
+          nowPlayer.setScore(0);
+          return;
+        }
+        world.spawnEntity(getEnemySpawnLocation(player, world), getEnemy());
+        nowPlayer.setGameTime(nowPlayer.getGameTime() - 5);
+      }, 0,5 * 20);
+
+
     }
     return false;
   }
 
   @EventHandler
   public void onEnemyDeath(EntityDeathEvent e) {
-    Player player = e.getEntity().getKiller();
+    LivingEntity enemy = e.getEntity();
+    Player player = enemy.getKiller();
     if (Objects.isNull(player) || playerScoreList.isEmpty()) {
       return;
     }
 
     for (PlayerScore playerScore : playerScoreList) {
       if (playerScore.getPlayerName().equals(player.getName())) {
-        playerScore.setScore(playerScore.getScore() + 10);
+        int point = switch (enemy.getType()) {
+          case ZOMBIE -> 10;
+          case SKELETON, WITCH -> 20;
+          default -> 0;
+        };
+
+        playerScore.setScore(playerScore.getScore() + point);
         player.sendMessage("敵を倒した！　現在のスコアは　" + playerScore.getScore() + "点！");
       }
     }
   }
 
   /**
-   * 新規のプレイヤー情報をリストに追加します
+   * 現在実行しているプレイヤーのスコア情報を取得する
    * @param player コマンドを実行したプレイヤー
+   * @return 現在実行しているプレイヤーのスコア情報
    */
-  private void addNewPlayer(Player player) {
+  private PlayerScore getPlayerScore(Player player) {
+    if (playerScoreList.isEmpty()) {
+      return addNewPlayer(player);
+    } else {
+      for (PlayerScore playerScore : playerScoreList) {
+        if (!playerScore.getPlayerName().equals(player.getName())) {
+          return addNewPlayer(player);
+        } else {
+          return playerScore;
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * 新規のプレイヤー情報をリストに追加します
+   *
+   * @param player コマンドを実行したプレイヤー
+   * @return 新規プレイヤー
+   */
+  private PlayerScore addNewPlayer(Player player) {
     PlayerScore newPlayer = new PlayerScore();
     newPlayer.setPlayerName(player.getName());
     playerScoreList.add(newPlayer);
+    return newPlayer;
   }
 
   /**
@@ -118,8 +162,8 @@ public class EnemyDownCommand implements CommandExecutor, Listener {
    * @return 敵
    */
   private EntityType getEnemy() {
-    List<EntityType> enemyList = List.of(EntityType.ZOMBIE, EntityType.SKELETON);
-    int random = new SplittableRandom().nextInt(2);
+    List<EntityType> enemyList = List.of(EntityType.ZOMBIE, EntityType.SKELETON, EntityType.WITCH);
+    int random = new SplittableRandom().nextInt(enemyList.size());
     return enemyList.get(random);
   }
 }
