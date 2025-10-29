@@ -1,7 +1,6 @@
 package plugin.enemydown;
 
 import org.bukkit.Bukkit;
-import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 import plugin.enemydown.command.EnemyDownCommand;
 

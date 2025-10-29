@@ -56,22 +56,24 @@ public class EnemyDownCommand extends BaseCommand implements Listener {
   public void onEnemyDeath(EntityDeathEvent e) {
     LivingEntity enemy = e.getEntity();
     Player player = enemy.getKiller();
-    if (Objects.isNull(player) || playerScoreList.isEmpty()) {
+
+    if (Objects.isNull(player) || spawnEntityList.stream().noneMatch(entity -> entity.equals(enemy))) {
       return;
     }
 
-    for (PlayerScore playerScore : playerScoreList) {
-      if (playerScore.getPlayerName().equals(player.getName())) {
-        int point = switch (enemy.getType()) {
-          case ZOMBIE -> 10;
-          case SKELETON, WITCH -> 20;
-          default -> 0;
-        };
+    playerScoreList.stream()
+        .filter(p -> p.getPlayerName().equals(player.getName()))
+        .findFirst()
+        .ifPresent(ps -> {
+          int point = switch (enemy.getType()) {
+            case ZOMBIE -> 10;
+            case SKELETON, WITCH -> 20;
+            default -> 0;
+          };
 
-        playerScore.setScore(playerScore.getScore() + point);
-        player.sendMessage("敵を倒した！　現在のスコアは　" + playerScore.getScore() + "点！");
-      }
-    }
+          ps.setScore(ps.getScore() + point);
+          player.sendMessage("敵を倒した！　現在のスコアは　" + ps.getScore() + "点！");
+        });
   }
 
   /**
@@ -144,6 +146,7 @@ public class EnemyDownCommand extends BaseCommand implements Listener {
             0, 60, 0);
 
         spawnEntityList.forEach(Entity::remove);
+        spawnEntityList = new ArrayList<>();
         return;
       }
       Entity spawnEntity = player.getWorld().spawnEntity(getEnemySpawnLocation(player), getEnemy());
